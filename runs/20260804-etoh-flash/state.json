@@ -1,0 +1,40 @@
+﻿{
+    "run_id":  "20260804-etoh-flash",
+    "title":  "ethanol-water flash",
+    "level":  "L1",
+    "phase":  "E",
+    "gate":  "pending",
+    "iter":  {
+                 "B":  0,
+                 "C":  1,
+                 "D":  0
+             },
+    "rollback":  0,
+    "apw_path":  "D:\\Projects\\aspen-agent\\runs\\20260804-etoh-flash\\model.apw",
+    "artifacts":  [
+                      "00-brief.md",
+                      "A-plan.md",
+                      "C-refine.md",
+                      "model.apw",
+                      "model-report.rep"
+                  ],
+    "blockers":  [
+                     "C-1 疑虑（不影响门禁）：ETHANOL/WATER 的 NRTL aij/bij 具体数值无法经 MCP 读出（VAL1..VAL12 返回 null，报告文件无二元参数表）。来源标志位 ESTIMATE=NO / ISUSER=0 / LBVLE=1 + 两点 VLE 与文献交叉验证（T 差<0.4 K、y 差<0.004）已双重确认为数据库回归值。若要把结论升到 B 级需人工在 GUI 查 Source 列。",
+                     "C-2 疑虑（已绕行）：MCP set_stream_composition_batch 的 basis / total_flow 参数静默不生效，返回消息仅回显入参；TOTFLOW 节点恒按 kmol/sec 解释且一旦写入无法置空，只能重建流股。最终改用组分质量流 ETHANOL=0.111112 / WATER=0.166668 kg/s（A-plan v1.1 已补录该行）。",
+                     "C-3 疑虑（已修复）：HEATER / FLASH2 的 SPEC_OPT 不随 set_param 自动切换，默认 TP 会给出 BLKSTAT=0 的错误结果（出口=进料）。已显式设 H1=PV、F1=PQ。需回写 pitfalls 与 playbook。",
+                     "C-4 疑虑（判定为误报）：simulation_warnings 返回两条 Pressure mismatch，系工具把流股压力换算成 bar 后与块的 SI 值 101325 直接比较所致。逐点回读确认全流程均 101325 Pa，Aspen 报告文件 Grep warning/error/severe 零命中。"
+                 ],
+    "pending":  [
+
+                ],
+    "notes":  [
+                  "A 门已通过：2026-08-05 用户回答『全部确认，进 C 阶段』，A-plan.md 6 条假设全部按默认值采纳，无修改。",
+                  "L1 裁剪：走 A -> C -> E，裁掉 B 与 D。原属 B 的物料闭合校核与 BIP 核查已在 C 阶段步骤 3 与步骤 7 完成。",
+                  "C 门已通过（第 1 轮即过，未用返工预算）：H1/F1 BLKSTAT=0、PER_ERROR=0、PROPSTAT=0；总质量/分组分/摩尔闭合均 0.000%；归因表 15 轮完整。",
+                  "D 阶段已裁：本 run 无产品硬指标（探索性『看能分到什么程度』），不存在给定指标反求参数的需求。",
+                  "基准工况结果 VFRAC=0.30：闪蒸 86.13 degC、duty 205.04 kW；VAPOR 385.35 kg/h / 乙醇 44.83 mol% (67.51 wt%)；LIQUID 614.66 kg/h / 乙醇 10.33 mol% (22.75 wt%)。",
+                  "扫描区间 VFRAC 0.10-0.50：气相量 136.77 -> 587.32 kg/h 单调升，气相乙醇 51.90 -> 35.50 mol% 单调降，全部 < 89.4 mol% 共沸上限。",
+                  "A-plan 已升 v1.1（主 agent 补录组分质量流一行，非设计变更）。"
+              ],
+    "updated":  "2026-08-05T18:10:00"
+}

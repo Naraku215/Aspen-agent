@@ -1,0 +1,14 @@
+{
+  "run_id": "<yyyyMMdd-短名>",
+  "title": "<任务标题>",
+  "level": "",
+  "phase": "A",
+  "gate": "pending",
+  "iter": { "B": 0, "C": 0, "D": 0 },
+  "rollback": 0,
+  "apw_path": "D:\\Projects\\aspen-agent\\runs\\<run-id>\\model.apw",
+  "artifacts": ["00-brief.md"],
+  "blockers": [],
+  "pending": [],
+  "updated": "<ISO 时间>"
+}

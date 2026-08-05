@@ -1,0 +1,18 @@
+# Aspen 二进制产物：体积大、无法 diff，不进版本库
+*.apw
+*.bkp
+*.apwz
+*.rep
+*.his
+*.appdf
+*.def
+*.summary
+~*.*
+
+# Aspen 运行时残留
+*.ktp
+*.dfd
+*.dpi
+*.inm
+
+# 保留所有 .md / .json / .ps1 —— 方案、归因表、状态是本系统的真正资产
