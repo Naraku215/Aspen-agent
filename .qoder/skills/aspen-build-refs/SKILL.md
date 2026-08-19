@@ -1,0 +1,86 @@
+---
+name: aspen-build-refs
+description: modeler 动手建模时的操作参考：门槛判据输出读法、参数语义与常见错误、不收敛调整经验、已知坑。状态机流程在 aspen-modeler agent 文件里，本 skill 不复述，只提供动手时查的细节。
+---
+
+# 建模操作参考
+
+状态机流程（S1–S9 / TUNE / PAUSED）在 aspen-modeler agent 里，这里不复述。
+本 skill 只在动手时查，分5块：判据读法、规定选项速查、参数语义、调参经验、已知坑。
+
+
+## 1. 门槛判据输出读法
+
+### find_incomplete_inputs()
+输出分三组：
+- **Critical**：必须清零。逐条对应到 block/stream，补参数
+- **Mode-irrelevant**：当前计算模式用不到，**忽略**
+- **Optional**：可选项，除非 design.md 明确要求否则忽略
+
+过关 = Critical 清零。**先跑 fill_trivial_params()** 再查，能自动填掉一批噪声。
+
+### validate_block(name)
+- `Engine.Ready` = true → 该块过关
+- false → 按 missing diagnostics 提示补缺
+GUI 红框 ≈ Engine.Ready=false 的块。
+
+### simulation_warnings()
+run 前必调。重点看两类：
+- 压力不匹配 → 对照 design.md 压力剖面
+- 断开进料 / 端口未连 → 回连接步骤补
+
+### block_status()
+BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
+
+### diagnose([keywords])
+两块输出：各块实时状态（BLKSTAT/PER_ERROR）+ 知识库命中。
+只摘块名与错误码关键词写进 state.note，不整段粘。
+
+## 2. 规定选项速查表
+
+| Block 类型 | mode_param | 有效值 | 每个模式需要的参数 |
+|---|---|---|---|
+| Flash2 | SPEC_OPT | TP / PD / TEMP / PRES / VFRAC / DUTY | TP: TEMP+PRES; PD: PRES+DUTY |
+| Compr | OPT_SPEC | PRES / TEMP / DUTY | PRES: PRES+SEFF; TEMP: TEMP+SEFF |
+| Heater | SPEC_OPT | TP / TEMP / PRES / DUTY / VFRAC | TP: TEMP+PRES; DUTY: DUTY |
+| RadFrac | （无 mode_param，用 set_column_specs） | — | — |
+
+**常见错误**：
+- 只填参数值不设规定选项 → Aspen 报"输入不完整"
+- 规定选项设错 → Aspen 用错误的参数组合计算，结果全错
+
+## 3. 参数语义与常见错误
+
+- **“规定”选项不会因填了参数而自动完成**，要逐个落：
+  - 塔（顺序不能颠倒）：set_column_stages → set_condenser_type + set_reboiler_type
+    → set_feed_stage + set_product_stage → set_column_pressure → set_column_specs
+  - 分流器：configure_fsplit
+  - 固体 / PSD 场景：set_param 到相应节点，节点不确定先 explore 找
+- **先连端口再填参数**：连接错了，参数校验结果无意义
+- 组分标签 > 8 字符被截断，用 list_components 核对实际标签
+- 先设单位制再添加组分，加完组分 reinit，否则部分模块节点不生成
+
+## 4. 调参经验（用户指示检修后按序排查）
+
+1. **规定冲突 / 不可达**（纯度规定超共沸上限等）→ 对照 design.md 可达性，
+   确实不可达 → PAUSED，别硬调
+2. **初值差**（塔温 / 组成剖面离解远）→ 给 estimate，或先放松 spec 再逐步收紧
+3. **压力倒挂** → 查节点压力剖面
+4. **参数超物理范围**（负流量 / 温标错）→ 查最近改过的参数
+
+**单变量纪律**：一次只改一个地方 → reinit_and_run() → 看 block_status。
+好转继续，恶化改回。多参同调无法归因。
+
+## 5. 已知坑
+
+- `.rep` 数 MB，只 Grep 抽行，整份 Read 会爆上下文
+- BIP 静默取 0 也能“收敛”但结果全错 —— S4 PROPERTY 的 BIP 核查必须做
+- 不收敛时**绝不 new_simulation 重来**：重建会丢全部已填参数，等于白干
+- **save() 挂起陷阱**：往已存在的路径 save 可能挂起超时（覆盖确认/文件锁）。
+  挂起 → 换新文件名保存，或先删旧文件再 save
+- **多 AspenPlus 进程干扰**：多实例并存会让 COM 调用挂起/超时；操作前确认
+  只有一个实例。Dispatch 可能绑错实例 → 先 `open_file` 绑定正确文档再操作
+- **run_script 不可用**：输出不可捕获、脚本静默失败；批量操作用单条消息并行多个
+  MCP 调用替代
+- **单位写错的典型症状**：FEED FLASH FAILURE 警告、塔顶温度离谱（如 200 K
+  而非 351 K）的“假收敛”（BLKSTAT=1 但物理完全错）。发现即回查 SI 值

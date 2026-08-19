@@ -1,4 +1,4 @@
-# Aspen 官方案例库索引
+﻿# Aspen 官方案例库索引
 
 位置：`D:\Program Files\AspenTech\Aspen Plus V15.0\GUI\Examples\`
 共 24 个分类、215 个 `.bkp`（Aspen Plus V15.0）。
@@ -10,7 +10,6 @@
 - 遇到不熟悉的**单元操作组合**（速率法吸收塔、多级冷剂、结晶+干燥串联）
 - 需要一个**可信的参照基准**来判断自己的结果是否离谱
 
-用法见 `.qoder/skills/aspen-modeling-methods/SKILL.md` 的"案例库逆向提取配方"一节。
 
 ---
 
