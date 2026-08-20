@@ -21,8 +21,18 @@
 `At 0.000000 0.000000`（SOEC、H2COOL1、PUMP1、FLASH2、FLASH3 等全叠原点）。
 `add_block` 从不设坐标，Aspen 默认放原点。COM 数据树不暴露坐标
 （`Data\Flowsheet\Section\GLOBAL\Input\PARAMSTRING` 全 null，无 `Data\Graphics`）。
-可行路径：离线编辑 `.bkp` 的 `PFSVData` 段（BLOCK 的 `At`/`Label At`，STREAM 的
-`At`/`ROUTE`），再导入。**已做**：`scripts/relayout-pfd.ps1` + 验证。
+可行路径：离线编辑 `.bkp` 的 `PFSVData` 段（BLOCK 的 `At`/`Label At`），再导入。
+**已做**：`scripts/relayout-pfd.ps1` + 验证（含用户目视）。
+
+实测踩出的 bkp 图形编辑三条规矩：
+1. `SIZE x1 x2 y1 y2` 行是打开时显示的画布窗口；新布局超出窗口则 PFD 看似空白 →
+   必须按 bbox+margin 扩窗。
+2. 把 STREAM 记录航点清零会让 Aspen 拒掉整个 PFSVData 段（连方块都空白）；正解是
+   **整条删除 STREAM 记录**并同步减 `# of PFS Objects`（LEGEND 也占一个计数，解析器
+   须把 LEGEND 当记录边界，否则尾部 VIEWPORT/PAGESETUP 被连删）。删后 Aspen 载入时
+   按拓扑自动重画连线，实测通过。
+3. MCP 拉起的 Aspen 实例窗口隐藏（进程在、任务栏无窗），须 user32 `ShowWindowAsync`
+   恢复前台（`scripts/show-aspen-window.ps1`）。
 
 ### 问题 3：设置-固体下自动生成名为 0 的 PSD 网格
 实验确证（两次隔离实验）：
@@ -90,8 +100,8 @@
 
 | 编号 | 内容 | 状态 |
 |---|---|---|
-| 2.1 | scripts/relayout-pfd.ps1：解析 PFSVData → 拓扑分层重排 At/Label → 清 ROUTE → 输出 model-relayout.bkp | **已做** |
-| 2.2 | 四门槛验证（载入/无重叠/拓扑一致/重算一致）；通过→纳入 modeler S9；不通过→降级布局清单 | **已做** |
+| 2.1 | scripts/relayout-pfd.ps1：解析 PFSVData → 拓扑分层重排 At/Label → 扩 SIZE 画布 → 删 STREAM 记录（Aspen 载入自动重画连线）→ 输出 model-relayout.bkp | **已做** |
+| 2.2 | 验证：原四门槛（载入/无重叠/拓扑/重算）漏"坐标在画布内"与目视，旧版实测空白；补扩窗+删 STREAM 方案后用户目视通过（方块整齐+连线自动重画）。教训：PFD 验证必须含画布内检查+目视 | **已做** |
 
 ### AGENT 侧（.qoder/ + AGENTS.md）
 
@@ -108,7 +118,9 @@
 1. 空白模拟 + FLASH2 + fill → Subs-Attr 只有 PSD 无 0：**通过**（fill 填 31 键，无 CUMFRAC/OV_PSDID 等 PSD 系键；explore Subs-Attr 只剩 PSD 一个子树）
 2. find_incomplete_inputs Critical 分组不恶化：**通过**（无 Critical 组；CUMFRAC 等仍列在 Other optional，那是 COM 自带节点非 fill 填入，符合预期）
 3. add_table_row 在临时空白模拟验证：**通过（带两条已知局限）**。工具已注册（51404 消除），RYIELD MOLE_YIELD 带标签建行成功（row0=WATER/row1=HYDROGEN）。局限：① 同标签重复添加报 AE_UNKERR 而非 "already exists"（该类表 GetLabel 恒报错致幂等扫描失效；且表按组分数自动展开后 InsertRow 被锁，只能先齐组分再建行）；② 建完行后按 docstring 用 set_value 标签路径（...\MOLE_YIELD\WATER\MIXED）填单元格不通——FindNode 无法穿透表格行（Path not found），表格单元格须 Elements(label) 逐层走，现有工具均不支持，见遗留清单
-4. model-relayout.bkp 四门槛：**已做，通过**（载入正常/22 块无重叠/拓扑与块列表一致/reinit_and_run 结果与原模型完全一致）
+4. model-relayout.bkp：**已做，通过**。首版过载入/无重叠/拓扑/重算四门槛但目视空白
+   （块搬出 SIZE 画布 + 清零 STREAM 致整段被拒）；修复（SIZE 扩窗 + 删 STREAM 记录、
+   计数同步减、LEGEND 作记录边界）后目视通过：方块整齐、连线由 Aspen 按拓扑自动重画
 5. 结论见本文状态列（runs 目录不提交）
 
 ---

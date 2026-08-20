@@ -16,9 +16,14 @@ Layout rules:
     ranks propagated from the core.
   - utility blocks (BLKTYPE HEATER / VALVE / PUMP): side lane at
     UtilityY, x between the ranks of their process neighbours.
-  - the new layout is centered on the old centroid so it stays inside
-    the original drawing viewport.
-  - stream segment-0 waypoints are cleared (Aspen re-routes on import).
+  - the new layout is centered on the old centroid, then the SIZE
+    (viewport) record is expanded to enclose every block, label and
+    annotation, so the diagram stays visible when the file is opened.
+  - stream graphics records are DROPPED from the PFSVData section
+    (zeroing their waypoints makes Aspen reject the whole section and
+    open a blank canvas; verified 2026-08-21). With no stream records
+    Aspen re-routes all streams from the model topology on load.
+    Use -KeepStreams to preserve the original (messy) stream graphics.
 
 The input file is never modified; output is written to -OutPath
 (default: <name>-relayout.bkp next to the input). A positions sidecar
@@ -32,7 +37,8 @@ param(
   [string]$OutPath = '',
   [double]$XSpacing = 3.0,
   [double]$YSpacing = 2.0,
-  [double]$UtilityY = -4.0
+  [double]$UtilityY = -4.0,
+  [switch]$KeepStreams
 )
 $ErrorActionPreference = 'Stop'
 
@@ -76,7 +82,7 @@ $recs = New-Object System.Collections.Generic.List[object]
 $cur = $null
 for ($i = $secStart; $i -le $secEnd; $i++) {
   $t = $lines[$i].Trim()
-  if ($t -eq 'BLOCK' -or $t -eq 'STREAM') {
+  if ($t -eq 'BLOCK' -or $t -eq 'STREAM' -or $t -eq 'LEGEND') {
     if ($cur -ne $null) { $recs.Add($cur) }
     $cur = @{ Kind = $t; Name = ''; Start = $i; End = $i }
   } elseif ($cur -ne $null) {
@@ -354,8 +360,60 @@ if ($oldN -gt 0 -and $newN -gt 0) {
 foreach ($k in $pos.Keys) { $pos[$k][0] += $shiftX; $pos[$k][1] += $shiftY }
 foreach ($k in $utilPos.Keys) { $utilPos[$k][0] += $shiftX; $utilPos[$k][1] += $shiftY }
 
+# ---------- grow SIZE (viewport) so the new layout stays visible ----------
+# SIZE x1 x2 y1 y2 is the canvas window Aspen shows on open. Centering the
+# layout on the old centroid does NOT keep it inside that window (the new
+# layout is much wider), so the window must be grown to enclose every
+# block / label / annotation coordinate, or the PFD opens apparently blank.
+$sizeIdx = -1
+$cx1 = 0.0; $cx2 = 0.0; $cy1 = 0.0; $cy2 = 0.0
+for ($j = $secStart; $j -le $secEnd; $j++) {
+  $sm = [regex]::Match($lines[$j], '^SIZE\s+(-?[0-9.]+)\s+(-?[0-9.]+)\s+(-?[0-9.]+)\s+(-?[0-9.]+)\s*$')
+  if ($sm.Success) {
+    $sizeIdx = $j
+    $cx1 = [double]$sm.Groups[1].Value; $cx2 = [double]$sm.Groups[2].Value
+    $cy1 = [double]$sm.Groups[3].Value; $cy2 = [double]$sm.Groups[4].Value
+    break
+  }
+}
+$labelOffPat = [regex]'^(?:Label At|Annotation At)\s+(-?[0-9.]+)\s+(-?[0-9.]+)'
+$lineRepl = @{}     # line index -> replacement line (SIZE / block At / Label / Annotation)
+$bx1 = $null; $bx2 = $null; $by1 = $null; $by2 = $null
+foreach ($r in $blockRecs) {
+  $ax = $null; $ay = $null; $dx = 0.0; $dy = 0.0
+  for ($j = $r.Start; $j -le $r.End; $j++) {
+    $am = $atPat.Match($lines[$j])
+    if ($am.Success -and $ax -eq $null) {
+      # Label/Annotation lines below still carry OLD absolute coords; the
+      # rewrite shifts them by (newAt - oldAt), so the bounding box must
+      # apply the same delta.
+      $oxv = [double]$am.Groups[1].Value; $oyv = [double]$am.Groups[2].Value
+      if ($pos.ContainsKey($r.Name)) { $ax = $pos[$r.Name][0]; $ay = $pos[$r.Name][1] }
+      elseif ($utilPos.ContainsKey($r.Name)) { $ax = $utilPos[$r.Name][0]; $ay = $utilPos[$r.Name][1] }
+      else { $ax = $oxv; $ay = $oyv }
+      $dx = $ax - $oxv; $dy = $ay - $oyv
+      if ($bx1 -eq $null -or $ax -lt $bx1) { $bx1 = $ax }
+      if ($bx2 -eq $null -or $ax -gt $bx2) { $bx2 = $ax }
+      if ($by1 -eq $null -or $ay -lt $by1) { $by1 = $ay }
+      if ($by2 -eq $null -or $ay -gt $by2) { $by2 = $ay }
+      continue
+    }
+    $lm = $labelOffPat.Match($lines[$j])
+    if ($lm.Success -and $ax -ne $null) {
+      $lx = [double]$lm.Groups[1].Value + $dx; $ly = [double]$lm.Groups[2].Value + $dy
+      if ($lx -lt $bx1) { $bx1 = $lx }; if ($lx -gt $bx2) { $bx2 = $lx }
+      if ($ly -lt $by1) { $by1 = $ly }; if ($ly -gt $by2) { $by2 = $ly }
+    }
+  }
+}
+$margin = 1.5
+if ($sizeIdx -ge 0 -and $bx1 -ne $null) {
+  $nx1 = [Math]::Min($cx1, $bx1 - $margin); $nx2 = [Math]::Max($cx2, $bx2 + $margin)
+  $ny1 = [Math]::Min($cy1, $by1 - $margin); $ny2 = [Math]::Max($cy2, $by2 + $margin)
+  $lineRepl[$sizeIdx] = 'SIZE {0:F5} {1:F5} {2:F5} {3:F5}' -f $nx1, $nx2, $ny1, $ny2
+}
+
 # ---------- build replacements ----------
-$lineRepl = @{}     # line index -> replacement line (block At / Label / Annotation)
 $rangeStart = @{}   # line index -> @{ End; Lines } (stream segment-0 zeroing)
 
 foreach ($r in $blockRecs) {
@@ -385,37 +443,28 @@ foreach ($r in $blockRecs) {
   }
 }
 
-$zeroBlock = @(
-  'At 0.000000 0.000000',
-  'Label At 0.000000 0.000000',
-  'ROUTE 0 0',
-  '$ $ 0.0 0.0',
-  'ROUTE 1 0',
-  '$ $ 0.0 0.0'
-)
-$streamsZeroed = 0
-foreach ($r in $streamRecs) {
-  $idxA = -1; $idxE = -1
-  for ($j = $r.Start; $j -le $r.End; $j++) {
-    if ($idxA -lt 0 -and $lines[$j] -match '^At\s+\S') { $idxA = $j }
-    elseif ($idxA -ge 0 -and $lines[$j] -match '^At\s+0\.000000\s+0\.000000$') { $idxE = $j; break }
+# ---------- drop stream graphics records (Aspen re-routes on load) ----------
+$dropRange = @{}    # line index -> end index (inclusive) to delete
+$streamsDropped = 0
+if (-not $KeepStreams) {
+  foreach ($r in $streamRecs) {
+    $dropRange[$r.Start] = $r.End
+    $streamsDropped++
   }
-  if ($idxA -lt 0) { continue }
-  if ($idxE -lt 0) { $idxE = $r.End + 1 }
-  if ($idxE -le $idxA) { continue }
-  $rangeStart[$idxA] = @{ End = $idxE; Lines = $zeroBlock }
-  $streamsZeroed++
+  # fix object count: header counts BLOCK + STREAM records
+  for ($j = $secStart; $j -le $secEnd; $j++) {
+    if ($lines[$j] -match '# of PFS Objects = ([0-9]+)') {
+      $lineRepl[$j] = '# of PFS Objects = ' + ([int]$Matches[1] - $streamsDropped)
+      break
+    }
+  }
 }
 
 # ---------- write output ----------
 $out = New-Object System.Collections.Generic.List[string]
 $i = 0
 while ($i -lt $lines.Count) {
-  if ($rangeStart.ContainsKey($i)) {
-    foreach ($l in $rangeStart[$i].Lines) { $out.Add($l) }
-    $i = $rangeStart[$i].End
-    continue
-  }
+  if ($dropRange.ContainsKey($i)) { $i = $dropRange[$i] + 1; continue }
   if ($lineRepl.ContainsKey($i)) { $out.Add($lineRepl[$i]) } else { $out.Add($lines[$i]) }
   $i++
 }
@@ -438,7 +487,12 @@ Write-Output ("PFSVData objects: " + $objCount + "  (BLOCK records: " + $blockRe
 Write-Output ("Blocks parsed from BLKID: " + $blockType.Count + "  (process: " + $proc.Count + ", utility: " + $utlSorted.Count + ")")
 Write-Output ("Edges parsed: " + $edges.Count + "  (cycle edges: " + $viol.Count + ")")
 Write-Output ("Blocks repositioned: " + ($pos.Count + $utilPos.Count))
-Write-Output ("Streams re-routed (segment-0 zeroed): " + $streamsZeroed)
+Write-Output ("Stream graphics records dropped (Aspen re-routes on load): " + $streamsDropped)
 Write-Output ("Max rank: " + (@($layers.Keys | Sort-Object | Select-Object -Last 1) -join ''))
 Write-Output ("Centroid shift: {0:F4} {1:F4}" -f $shiftX, $shiftY)
+if ($sizeIdx -ge 0 -and $lineRepl.ContainsKey($sizeIdx)) {
+  Write-Output ("Viewport grown: " + $lines[$sizeIdx] + "  ->  " + $lineRepl[$sizeIdx])
+} else {
+  Write-Output "Viewport: SIZE record not found (unchanged)"
+}
 Write-Output ("Written: " + $OutPath)
