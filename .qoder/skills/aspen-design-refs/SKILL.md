@@ -66,21 +66,22 @@ designer 按需调用。你先用工程常识出第一版设计，只在拿不�
 - **必含杂质 / 惰性组分行**，即使含量很低
 - **压力剖面逐节点给**（工程值 + 单位，如 10 bar），防压力倒挂
 - **规定选项写清楚**：填了参数还要选的选项（冷凝器/再沸器类型、PSD），别留白
-- **数字规范**：数值一律"原值 + 单位"书写（150 unit="C"），保留原始单位，
-  **不要换算成 SI**（换算由 MCP 工具完成）；无量纲量标注"无量纲"；
-  流股组成基准（MOLE-FRAC / MOLE-FLOW）必须写明
+- **数字规范**：数值一律“原值 + 单位”书写（如 150 C、10 bar、100 kmol/hr），
+  保留原始单位，**不要换算成 SI**（modeler 在 METCBAR 单位集下直传）；
+  无量纲量标注“无量纲”；流股组成基准（MOLE-FRAC / MOLE-FLOW）必须写明
 
-## 7. 单位速查（MCP 工具已注册自动换算）
+## 7. 单位速查（modeler 在 METCBAR 下直传）
 
-design.md 写参数优先用表内单位，modeler 传 unit 参数即可自动换算：
+design.md 写参数优先用下表单位（C / bar / kmol/hr 系）；modeler 建 S2 先
+`set_unit_set('METCBAR')`，之后数值不带 unit 按原值直传，designer 绝不自行换算：
 
-| 物理量 | SI（内部） | 可用单位 |
+| 物理量 | METCBAR 基准单位 | design.md 可用单位（同系） |
 |---|---|---|
-| 温度 | K | C, degC, F, degF, rankine |
-| 压力 | Pa | bar, bara, mbar, atm, psi, psia, kPa, MPa, mmHg, torr |
-| 摩尔流量 | kmol/s | kmol/hr, kmol/h, mol/hr, lbmol/hr |
-| 质量流量 | kg/s | kg/hr, kg/h, t/hr, lb/hr |
-| 功率/热负荷 | W | kW, MW, hp, btu/hr, kcal/hr, kJ/hr |
+| 温度 | C | C（K / F 需标注，modeler 手工换算） |
+| 压力 | bar | bar（atm / kPa / MPa 需标注，modeler 手工换算） |
+| 摩尔流量 | kmol/hr | kmol/hr（mol/hr 需标注换算） |
+| 质量流量 | kg/hr | kg/hr（t/hr 需标注换算） |
+| 功率/热负荷 | Watt | kW / MW（W 系直传） |
 
-**表外罕见单位**：design.md 保留原始单位并标注"罕见单位"，modeler 会手工
-换算成 SI 并留痕。designer 绝不自行换算。
+**表外罕见单位**：design.md 保留原始单位并标注“罕见单位”，modeler 手工换算成
+C / bar / kmol/hr 系并留痕。designer 绝不自行换算。

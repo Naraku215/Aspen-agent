@@ -20,8 +20,9 @@ skills:
    绝不重新 `new_simulation()`——那会反复调 MCP 浪费大量时间。
 4. **可暂停**：调不出原因 → `save(apw_path)` + 状态置 PAUSED，让用户进 Aspen 人工检修。
 5. **握住会话不交棒**：从头干到 save，中途不把 MCP 会话交给别人。
-6. **单位约定**：design.md 的数值一律按"工程值 + unit 参数"原样传给工具，由工具换算；
-   无量纲量不传 unit；design.md 里的 SI 值只用于核对，绝不作为传参依据（细则见 S7）。
+6. **单位约定**：S2 先 `set_unit_set('METCBAR')`，之后所有数值**不带 `unit` 参数**
+   按 design.md 工程原值直传（C / bar / kmol/hr）；design.md 里的 SI 值只用于核对，
+   绝不作为传参依据（细则见 S7）。
 7. **调 MCP 前先确认参数名**：参数名不统一（`visible` 用 `show`、`connect` 用
    `source_block`、`batch_refresh` 用 `off`），按 schema 调用，别靠试错。
 8. **停下必留痕**：任何非正常停下（PAUSED / NEEDS_INPUT / BLOCKED），必须先把卡点
@@ -45,8 +46,8 @@ skills:
      （GUI 显示不是建模的必要条件），回复中说明"GUI 未显示，请在任务管理器确认 Aspen 进程"
 
 ### S2 UNITS
-- 动作：`set_unit_set("SI")`（其他默认不管）
-- 过关：`get_unit_set()` 确认返回 SI
+- 动作：`set_unit_set("METCBAR")`（C / bar / kmol/hr；其他默认不管）
+- 过关：`get_unit_set()` 确认返回 METCBAR，写入 state.unit_set
 
 ### S3 COMPONENTS（加组分）
 - 动作：`add_component(<design.md §2 的数据库 ID>)` × N
@@ -62,7 +63,8 @@ skills:
   Binary Interaction")` 列出 BIP 参数集，读对应参数集（PENG-ROB→`PRKBV`、
   NRTL-RK→`NRTL-1`）确认关键对非零。读不全的写进 state.note **不许沉默略过**；
   缺失的记"XX 二元对无 BIP，Aspen 将用 UNIFAC 估算，结果需重点核对"
-- 过关：`get_property_method()` 确认已设 + 关键二元对 BIP 已核查
+- 过关：`get_property_method()` 确认已设 + 关键二元对 BIP 已核查，写入
+  state.property_method
 - 对应 GUI 左下角"要求的物性输入已完成"
 
 ### S5 BLOCKS
@@ -92,15 +94,18 @@ skills:
 塔（RadFrac）按 aspen-build-refs §3 的顺序逐个落，不要乱序。
 
 **单位约定（强制）**：
-- design.md 里的数值都是"工程值 + 单位"，调用时**原样带 unit 参数**，换算交给工具：
-  `set_stream_param("FEED","TEMP",30,unit="C")`、`set_param("C-101","PRES",30,unit="bar")`
-- **不带 unit 时值按 SI 处理**（K / Pa / kmol/s / W）——绝不要把工程值当 SI 传
-- design.md 中的"SI 值"列（若有）只用于核对结果量级，**禁止作为传参依据**——
-  换算权威在工具，不在设计文档
-- 无量纲量不传 unit：回流比 / 摩尔分率 / 效率 / 塔板数 / VFRAC
+- S2 已把全局单位集设为 METCBAR（C / bar / kmol/hr），之后所有数值**不带 unit 参数**，
+  按 design.md 工程原值直传：`set_stream_param("FEED","TEMP",30)`、
+  `set_param("C-101","PRES",30)`——30 C / 30 bar 在 METCBAR 下就是 30
+- **为什么不带 unit**：本机 `convert_value` 按节点显示单位查表，ENG 集下温度节点
+  返回 F，带 unit 必报 `No unit conversion registered for C -> F`；METCBAR 直传绕行
+  （实验确证，见 aspen-build-refs 已知坑）
+- design.md 中的“SI 值”列（若有）只用于核对结果量级，**禁止作为传参依据**
+- 无量纲量同样不带 unit：回流比 / 摩尔分率 / 效率 / 塔板数 / VFRAC
 - `set_tear_estimate` 同时设 temp 和 pres 要**分两次调**（一个 unit 只对应一个物理量）
-- **罕见单位回退**（工具报 `No unit conversion registered`）：手工换算成 SI 值
-  （写出换算因子与公式），以不带 unit 的方式传入，并把换算过程记进 state.note
+- **罕见单位回退**（design.md 给的值不在 METCBAR 标准内，如 gmol/s、psia）：
+  先 `get_unit_set()` 确认当前集，工具报错时手工换算成 C / bar / kmol/hr 值
+  （写出换算因子与公式），仍不带 unit 传入，并把换算过程记进 state.note
 
 - 动作：`set_stream_composition_batch` / `set_stream_param` / `set_param` /
   `set_column_*` / `configure_fsplit`，填完 `fill_trivial_params()`
@@ -108,7 +113,7 @@ skills:
   1. `set_param` 只能设模块参数，物流参数必须用 `set_stream_param`
   2. 进料组成按 design.md 标注的基准传 basis（MOLE-FRAC / MOLE-FLOW）
 - **循环物流**：`list_tear_streams()` 非空 → 按 design.md §7 用 `set_tear_estimate`
-  给初值（temp 与 pres 分开调用，各带各的 unit）——好的 tear 初值是循环收敛最有效的加速器
+  给初值（temp 与 pres 分开调用，都不带 unit）——好的 tear 初值是循环收敛最有效的加速器
 - 过关：design.md 列的参数全部填完（模块参数 + 进料流股 + tear 初值）
 
 ### S8 CHECK_GATE（完整性检查 + 补缺循环）
@@ -133,7 +138,9 @@ skills:
   - 哪个流股结果为空
   - `Engine.Ready` 和 `Engine.IsRunning` 的值
 - 过关后：`save("<run目录>/sim/model.apw")` **显式传绝对路径**，state.status=converged，
-  交回主 agent
+  交回主 agent。**PFD 布局版交付附件由主 agent 用
+  `scripts/relayout-pfd.ps1` 生成 `sim/model-layout.bkp`**（modeler 无 Bash 工具，
+  不自己跑脚本；model.bkp 由 Aspen 随 apw 保存自动生成）
 - **禁止无参调用 `save()`**——新模拟没有默认路径，会存丢；apw_path 约定为
   `<run目录>/sim/model.apw`（主 agent 派发时给 run 目录）
 - GUI 保持显示（不隐藏），用户可继续查看结果
@@ -161,9 +168,18 @@ skills:
 
 ## 续跑
 
-prompt 说明是续跑时：先 `status()` 看当前打开文件，不是 apw_path 就 `open_file()`
-（apw_path 缺失时按约定 `<run目录>/sim/model.apw`），确认 `visible(show=true)`
-（GUI 供用户观察），读 state.json 的 `phase`，**从该状态继续，不从头来**。
+prompt 说明是续跑时：
+1. 读 state.json，拿到 `apw_path`（缺失时按约定 `<run目录>/sim/model.apw`）与 `phase`
+2. `close_file()` + `open_file(apw_path)` **无条件重开**（不猜当前会话状态，保证干净）
+3. 确认 `visible(show=true)`（GUI 供用户观察）
+4. **轻量对账**：只跑三个短调用——`list_all_blocks()` + `list_components()` +
+   `get_property_method()`（合计 <1K token），与 state.json 声明的 `phase` 产物比对：
+   - phase ≥ S5 时块数量与声明一致、phase ≥ S3 时组分一致、phase ≥ S4 时物性方法一致
+   - **不一致以模型为准**，改写 state.json 对应字段后继续；不逐块 `get_block`、
+     不跑 `flowsheet_topology`（省 token，细节留给各阶段自身判据）
+   - 对账完成更新 `last_verified_at`
+5. 从 `phase` 对应状态继续，**不从头来**
+
 若 phase < S9，先 `batch_refresh(off=true)` 关掉刷新提高后续批量操作效率；
 若 phase ≥ S9 或 REVIEW，保持 `batch_refresh(off=false)` 让用户观察。
 
@@ -173,17 +189,35 @@ prompt 说明是续跑时：先 `status()` 看当前打开文件，不是 apw_pa
 {
   "run_id": "<run-id>",
   "phase": "CHECK_GATE",
+  "step_index": 8,
   "apw_path": "<run目录绝对路径>/sim/model.apw",
+  "unit_set": "METCBAR",
+  "property_method": "PSRK",
   "status": "in_progress",
   "tune_attempts": 0,
   "last_error": "",
   "note": "",
+  "last_verified_at": "",
+  "events": [],
   "updated": "<ISO 时间>"
 }
 ```
 
+字段说明：
+- `step_index`：当前 S 序号（S1–S9），与 `phase` 同义便于快速定位
+- `unit_set` / `property_method`：S2 / S4 过关时落盘，续跑对账用
+- `last_verified_at`：续跑轻量对账完成时间
+- `events[]`：**追加式日志**，每个写操作一条
+  `{"ts": "<ISO 时间>", "phase": "S5", "action": "add_block", "target": "RX1", "result": "ok"}`，
+  **只追加不重写**——主 agent 在 subagent 无返回时靠它复述进度
+
 `status` ∈ in_progress / converged / paused / blocked / needs_input。
 **任何非正常停下，先写 last_error 再置状态**（铁律 8）。
+
+**落盘频率**：
+- 每个 S 阶段结束（过关或停下）即 `save("<run目录>/sim/model.apw")` + 更新 state.json
+- S5（建块）与 S7（填参数）写操作密集：每 5 个写操作往 `events[]` 追加一批、
+  每 20 个写操作落一次盘，避免频繁 save 拖慢批量操作
 
 ## 上下文卫生
 

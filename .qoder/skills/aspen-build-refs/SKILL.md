@@ -46,8 +46,11 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
 | RadFrac | （无 mode_param，用 set_column_specs） | — | — |
 
 **常见错误**：
-- 只填参数值不设规定选项 → Aspen 报"输入不完整"
+- 只填参数值不设规定选项 → Aspen 报“输入不完整”
 - 规定选项设错 → Aspen 用错误的参数组合计算，结果全错
+- **塔纯度禁用固定 D:F 表达**：本案例 `D:F=0.5` 锁死纯度在 99.0 wt%，
+  RR 2→4 组成一个数字未变、再沸器 2.54→4.42 MW 白涨。正解 Design Spec
+  （纯度）+ Vary（RR 或 D:F），建行用 `add_table_row` + `set_value`（见 §3）
 
 ## 3. 参数语义与常见错误
 
@@ -59,6 +62,11 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
 - **先连端口再填参数**：连接错了，参数校验结果无意义
 - 组分标签 > 8 字符被截断，用 list_components 核对实际标签
 - 先设单位制再添加组分，加完组分 reinit，否则部分模块节点不生成
+- **塔纯度指标用 Design Spec，不用固定 D:F**：design.md 要求塔顶/塔底纯度时，
+  建 Design Spec（纯度）+ Vary（RR 或 D:F），让 Aspen 自己求回流比；
+  固定 D:F 会锁死纯度且 RR 改动无效果（见 §2 常见错误）。
+  建行用 `add_table_row(path, label)` + `set_value` 两步：Design Spec/Vary
+  表节点在 `\Data\FlowsheetingOptions\DesignSpec\...`（行结构不确定先 explore）
 
 ## 4. 调参经验（用户指示检修后按序排查）
 
@@ -84,3 +92,10 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
   MCP 调用替代
 - **单位写错的典型症状**：FEED FLASH FAILURE 警告、塔顶温度离谱（如 200 K
   而非 351 K）的“假收敛”（BLKSTAT=1 但物理完全错）。发现即回查 SI 值
+- **带 unit 必报 `No unit conversion registered for C -> F`**：本机
+  `convert_value` 按节点显示单位查表，ENG 集下温度节点返回 F，带 unit 时
+  C 与 F 之间无注册换算对就报错。绕行：S2 先 `set_unit_set('METCBAR')`，
+  之后所有数值不带 unit 按工程原值（C / bar / kmol/hr）直传（实验确证）
+- **`set_column_specs` 的 rr+d / rr+b 组合在 `ALGORITHM=STANDARD` 下被拒**：
+  只能 `set_param` 单独改 `BASIS_RR` / `D:F`；要自动求回流比请走 Design Spec
+  （见 §3）

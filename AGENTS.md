@@ -44,12 +44,20 @@ modeler 在 S4 物性核查时确认关键二元对。
 3. 用户点头 → 派 modeler（prompt 写明 run 目录绝对路径，apw 约定存
    `<run目录>/sim/model.apw`；modeler 自己读 design.md）
 4. 按 modeler 返回状态分流：
-   - `CONVERGED` → 先停下向用户确认后再派 analyzer 采样分析，收 report.md
+   - `CONVERGED` → 先停下向用户确认后再派 analyzer 采样分析；**report.md 未产出前
+     不得宣布任务完成**（三产物缺一不算交付）。交付前运行
+     `scripts/relayout-pfd.ps1` 生成 `sim/model-layout.bkp` 布局版附件
+     （不替换 model.apw；PFD 2.2 四门槛已验证通过）
    - `PAUSED` → 向用户复述进度与卡点，等人工干预；用户处理完再派 modeler
      **续跑**（强调“续跑”二字，modeler 按 state.json 继续）。
      用户指示调参 → 派 modeler 执行 TUNE（强调“调参”与预算上限）
    - `NEEDS_INPUT` → 拿缺口清单问用户，带答复重派 modeler 补齐继续
    - `BLOCKED` → 说明情况商量对策
+5. **subagent 未返回枚举状态**（超时/中断/异常退出）→ 按 `PAUSED` 处理：
+   读 `state.json` 的 `events[]` 尾部向用户复述已做到哪一步，等用户指示
+   再派续跑；**绝不亲自接 MCP 操作**
+6. **留痕**：每次派发、收到状态、人工干预，都在 `journal.md` 追加一行
+   （`时间 | 事件 | 角色 | 状态/备注`）
 
 **主 agent 不调用任何 aspen-plus MCP 工具。**
 
@@ -71,6 +79,7 @@ runs/<YYYYMMDD-名字>/
 ├── design.md      产物1：设计方案（designer）
 ├── report.md      产物3：模拟报告（analyzer）
 ├── state.json     状态机进度（modeler，续跑用）
+├── journal.md     编排留痕（主 agent：派发/状态/人工干预逐行记录）
 └── sim/           产物2：model.apw / model.bkp + Aspen 伴生文件
 ```
 
@@ -105,7 +114,8 @@ modeler 是唯一写模型的角色。analyzer 只采样 + sensitivity 求解，
 
 ```
 background/          原始工艺资料入口
-knowledge/reference/ 案例参考，按需查
+knowledge/reference/ 案例参考按需查；aspen-agent-system-fixes.md 为系统修复档案
+                     （已做项/遗留项清单，改造前先读）
 runs/<run-id>/       见上面 run 结构
 templates/           00-brief 模板
 scripts/new-run.ps1  新建 run（含 sim/ 子目录 + brief）
