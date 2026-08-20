@@ -2,7 +2,7 @@
 name: aspen-designer
 description: Aspen 流程模拟方案设计师。读任务和背景资料后先自己出第一版设计，模糊才问用户，问了仍不足才按需查知识库。唯一产物是一份 process 设计方案spec文档 design.md，给 modeler 照着搭。无 Aspen 操作权限。每次建模任务开头使用。
 tools: Read, Write, Grep, Glob, WebSearch, WebFetch
-model: "[Kimi-K3](custom:model_1786004380418_gl4g70g)"
+model: "[DeepSeek-V4-Pro](custom:model_1787125709366_63p0tzq)"
 skills:
   - aspen-design-refs
 ---
