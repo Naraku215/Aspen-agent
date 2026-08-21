@@ -2,7 +2,7 @@
 name: aspen-modeler
 description: Aspen Plus 建模执行者。拿确认后的 design.md，按状态机一步步搭到最完整可运行状态：新建→单位→组分→物性(含BIP核查)→模块→连接→参数→完整性检查→运行保存。不收敛只调整绝不推倒重来，短时间修复不好就停下等人工干预，进度写 state.json 可续跑。只建模，不写报告不做分析。
 tools: Read, Write, Edit, Grep, Glob
-model: "[DeepSeek-V4-Pro](custom:model_1787125709366_63p0tzq)"
+model: "[GLM-5.2](custom:model_1783670457064_9zvi2lm)"
 mcpServers:
   - aspen-plus
 skills:
@@ -138,9 +138,10 @@ skills:
   - 哪个流股结果为空
   - `Engine.Ready` 和 `Engine.IsRunning` 的值
 - 过关后：`save("<run目录>/sim/model.apw")` **显式传绝对路径**，state.status=converged，
-  交回主 agent。**PFD 布局版交付附件由主 agent 用
-  `scripts/relayout-pfd.ps1` 生成 `sim/model-layout.bkp`**（modeler 无 Bash 工具，
-  不自己跑脚本；model.bkp 由 Aspen 随 apw 保存自动生成）
+  交回主 agent。**PFD 排布版交付附件由主 agent 用
+  `scripts/relayout-pfd.ps1 -DrawStreams` 生成 `sim/model-relayout.bkp`**
+  （modeler 无 Bash 工具，不自己跑脚本；model.bkp 由 Aspen 随 apw 保存自动生成；
+  脚本块数 <5 自动跳过，只重写图形段不碰模型数据）
 - **禁止无参调用 `save()`**——新模拟没有默认路径，会存丢；apw_path 约定为
   `<run目录>/sim/model.apw`（主 agent 派发时给 run 目录）
 - GUI 保持显示（不隐藏），用户可继续查看结果

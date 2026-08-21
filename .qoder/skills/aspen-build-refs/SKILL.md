@@ -99,3 +99,14 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
 - **`set_column_specs` 的 rr+d / rr+b 组合在 `ALGORITHM=STANDARD` 下被拒**：
   只能 `set_param` 单独改 `BASIS_RR` / `D:F`；要自动求回流比请走 Design Spec
   （见 §3）
+
+## 6. PFD 重排脚本（relayout-pfd.ps1）
+
+收敛保存后由主 agent 跑 `scripts/relayout-pfd.ps1 -BkpPath <run>/sim/model.bkp
+-DrawStreams`，产出可读的 `sim/model-relayout.bkp`。要点：
+- 纯离线重写 bkp 第一个 PFSVData 图形段，**不碰模型数据**，输入文件只读
+- 块数 <5 自动跳过；块间流股走统一网格 + A* 通道（不穿模块、不重合），
+  端口流股（feed/product）删除记录交 Aspen 原生箭头——自画端口线效果差，别改回
+- 航点格式（≥7 点骨架、固定码序）在 V15 往返验证过；怀疑 Aspen 拒收新格式时，
+  用“另存临时 bkp + grep 航点”往返法客观判定，别靠目视猜
+- modeler 无 Bash，不在建模会话里跑此脚本
