@@ -67,21 +67,22 @@ designer 按需调用。你先用工程常识出第一版设计，只在拿不�
 - **压力剖面逐节点给**（工程值 + 单位，如 10 bar），防压力倒挂
 - **规定选项写清楚**：填了参数还要选的选项（冷凝器/再沸器类型、PSD），别留白
 - **数字规范**：数值一律“原值 + 单位”书写（如 150 C、10 bar、100 kmol/hr），
-  保留原始单位，**不要换算成 SI**（modeler 在 METCBAR 单位集下直传）；
+  保留原始单位，**不要换算成 SI**（modeler 按工程值 + unit 传工具换算）；
   无量纲量标注“无量纲”；流股组成基准（MOLE-FRAC / MOLE-FLOW）必须写明
 
-## 7. 单位速查（modeler 在 METCBAR 下直传）
+## 7. 单位速查（design.md 优先工程单位，modeler 带 unit 传工具换算）
 
-design.md 写参数优先用下表单位（C / bar / kmol/hr 系）；modeler 建 S2 先
-`set_unit_set('METCBAR')`，之后数值不带 unit 按原值直传，designer 绝不自行换算：
+design.md 写参数优先用下表工程单位（C / bar / kmol/hr 系）；modeler 按
+“工程值 + unit 参数”原样传工具，由工具换算，designer 绝不自行换算：
 
-| 物理量 | METCBAR 基准单位 | design.md 可用单位（同系） |
+| 物理量 | 推荐工程单位 | design.md 可用单位（同系） |
 |---|---|---|
-| 温度 | C | C（K / F 需标注，modeler 手工换算） |
-| 压力 | bar | bar（atm / kPa / MPa 需标注，modeler 手工换算） |
-| 摩尔流量 | kmol/hr | kmol/hr（mol/hr 需标注换算） |
-| 质量流量 | kg/hr | kg/hr（t/hr 需标注换算） |
-| 功率/热负荷 | Watt | kW / MW（W 系直传） |
+| 温度 | C | C（K / F 需标注） |
+| 压力 | bar | bar（atm / kPa / MPa 需标注） |
+| 摩尔流量 | kmol/hr | kmol/hr（mol/hr 需标注） |
+| 质量流量 | kg/hr | kg/hr（t/hr 需标注） |
+| 功率/热负荷 | Watt | kW / MW |
 
-**表外罕见单位**：design.md 保留原始单位并标注“罕见单位”，modeler 手工换算成
-C / bar / kmol/hr 系并留痕。designer 绝不自行换算。
+**表外罕见单位**：design.md 保留原始单位并标注“罕见单位”；若工具报
+`No unit conversion registered`，modeler 手工换算成 SI 值（K / Pa / kmol/s / W）
+不带 unit 传入并留痕。designer 绝不自行换算。

@@ -20,9 +20,8 @@ skills:
    绝不重新 `new_simulation()`——那会反复调 MCP 浪费大量时间。
 4. **可暂停**：调不出原因 → `save(apw_path)` + 状态置 PAUSED，让用户进 Aspen 人工检修。
 5. **握住会话不交棒**：从头干到 save，中途不把 MCP 会话交给别人。
-6. **单位约定**：S2 先 `set_unit_set('METCBAR')`，之后所有数值**不带 `unit` 参数**
-   按 design.md 工程原值直传（C / bar / kmol/hr）；design.md 里的 SI 值只用于核对，
-   绝不作为传参依据（细则见 S7）。
+6. **单位约定**：design.md 的数值一律按“工程值 + unit 参数”原样传给工具，由工具换算；
+   无量纲量不传 unit；design.md 里的 SI 值只用于核对，绝不作为传参依据（细则见 S7）。
 7. **调 MCP 前先确认参数名**：参数名不统一（`visible` 用 `show`、`connect` 用
    `source_block`、`batch_refresh` 用 `off`），按 schema 调用，别靠试错。
 8. **停下必留痕**：任何非正常停下（PAUSED / NEEDS_INPUT / BLOCKED），必须先把卡点
@@ -46,8 +45,8 @@ skills:
      （GUI 显示不是建模的必要条件），回复中说明"GUI 未显示，请在任务管理器确认 Aspen 进程"
 
 ### S2 UNITS
-- 动作：`set_unit_set("METCBAR")`（C / bar / kmol/hr；其他默认不管）
-- 过关：`get_unit_set()` 确认返回 METCBAR，写入 state.unit_set
+- 动作：`set_unit_set("SI")`（其他默认不管）
+- 过关：`get_unit_set()` 确认返回 SI
 
 ### S3 COMPONENTS（加组分）
 - 动作：`add_component(<design.md §2 的数据库 ID>)` × N
@@ -94,18 +93,15 @@ skills:
 塔（RadFrac）按 aspen-build-refs §3 的顺序逐个落，不要乱序。
 
 **单位约定（强制）**：
-- S2 已把全局单位集设为 METCBAR（C / bar / kmol/hr），之后所有数值**不带 unit 参数**，
-  按 design.md 工程原值直传：`set_stream_param("FEED","TEMP",30)`、
-  `set_param("C-101","PRES",30)`——30 C / 30 bar 在 METCBAR 下就是 30
-- **为什么不带 unit**：本机 `convert_value` 按节点显示单位查表，ENG 集下温度节点
-  返回 F，带 unit 必报 `No unit conversion registered for C -> F`；METCBAR 直传绕行
-  （实验确证，见 aspen-build-refs 已知坑）
-- design.md 中的“SI 值”列（若有）只用于核对结果量级，**禁止作为传参依据**
-- 无量纲量同样不带 unit：回流比 / 摩尔分率 / 效率 / 塔板数 / VFRAC
+- design.md 里的数值都是“工程值 + 单位”，调用时**原样带 unit 参数**，换算交给工具：
+  `set_stream_param("FEED","TEMP",30,unit="C")`、`set_param("C-101","PRES",30,unit="bar")`
+- **不带 unit 时值按 SI 处理**（K / Pa / kmol/s / W）——绝不要把工程值当 SI 传
+- design.md 中的“SI 值”列（若有）只用于核对结果量级，**禁止作为传参依据**——
+  换算权威在工具，不在设计文档
+- 无量纲量不传 unit：回流比 / 摩尔分率 / 效率 / 塔板数 / VFRAC
 - `set_tear_estimate` 同时设 temp 和 pres 要**分两次调**（一个 unit 只对应一个物理量）
-- **罕见单位回退**（design.md 给的值不在 METCBAR 标准内，如 gmol/s、psia）：
-  先 `get_unit_set()` 确认当前集，工具报错时手工换算成 C / bar / kmol/hr 值
-  （写出换算因子与公式），仍不带 unit 传入，并把换算过程记进 state.note
+- **罕见单位回退**（工具报 `No unit conversion registered`）：手工换算成 SI 值
+  （写出换算因子与公式），以不带 unit 的方式传入，并把换算过程记进 state.note
 
 - 动作：`set_stream_composition_batch` / `set_stream_param` / `set_param` /
   `set_column_*` / `configure_fsplit`，填完 `fill_trivial_params()`
@@ -113,7 +109,7 @@ skills:
   1. `set_param` 只能设模块参数，物流参数必须用 `set_stream_param`
   2. 进料组成按 design.md 标注的基准传 basis（MOLE-FRAC / MOLE-FLOW）
 - **循环物流**：`list_tear_streams()` 非空 → 按 design.md §7 用 `set_tear_estimate`
-  给初值（temp 与 pres 分开调用，都不带 unit）——好的 tear 初值是循环收敛最有效的加速器
+  给初值（temp 与 pres 分开调用，各带各的 unit）——好的 tear 初值是循环收敛最有效的加速器
 - 过关：design.md 列的参数全部填完（模块参数 + 进料流股 + tear 初值）
 
 ### S8 CHECK_GATE（完整性检查 + 补缺循环）
@@ -192,7 +188,6 @@ prompt 说明是续跑时：
   "phase": "CHECK_GATE",
   "step_index": 8,
   "apw_path": "<run目录绝对路径>/sim/model.apw",
-  "unit_set": "METCBAR",
   "property_method": "PSRK",
   "status": "in_progress",
   "tune_attempts": 0,
@@ -206,7 +201,7 @@ prompt 说明是续跑时：
 
 字段说明：
 - `step_index`：当前 S 序号（S1–S9），与 `phase` 同义便于快速定位
-- `unit_set` / `property_method`：S2 / S4 过关时落盘，续跑对账用
+- `property_method`：S4 过关时落盘，续跑对账用
 - `last_verified_at`：续跑轻量对账完成时间
 - `events[]`：**追加式日志**，每个写操作一条
   `{"ts": "<ISO 时间>", "phase": "S5", "action": "add_block", "target": "RX1", "result": "ok"}`，

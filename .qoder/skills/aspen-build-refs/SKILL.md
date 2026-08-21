@@ -92,10 +92,6 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
   MCP 调用替代
 - **单位写错的典型症状**：FEED FLASH FAILURE 警告、塔顶温度离谱（如 200 K
   而非 351 K）的“假收敛”（BLKSTAT=1 但物理完全错）。发现即回查 SI 值
-- **带 unit 必报 `No unit conversion registered for C -> F`**：本机
-  `convert_value` 按节点显示单位查表，ENG 集下温度节点返回 F，带 unit 时
-  C 与 F 之间无注册换算对就报错。绕行：S2 先 `set_unit_set('METCBAR')`，
-  之后所有数值不带 unit 按工程原值（C / bar / kmol/hr）直传（实验确证）
 - **`set_column_specs` 的 rr+d / rr+b 组合在 `ALGORITHM=STANDARD` 下被拒**：
   只能 `set_param` 单独改 `BASIS_RR` / `D:F`；要自动求回流比请走 Design Spec
   （见 §3）
