@@ -44,9 +44,16 @@ modeler 在 BIP_GATE 确认关键二元对。
 3. 用户点头 → 派 modeler（prompt 写明 run 目录绝对路径，apw 约定存
    `<run目录>/sim/model.apw`；modeler 自己读 design.md）
 4. 按 modeler 返回状态分流：
-   - `CONVERGED` → 先跑 `scripts/relayout-pfd.ps1 -BkpPath <run目录>/sim/model.bkp
-        -DrawStreams` 生成 PFD 排布版 `sim/model-relayout.bkp`（块数 <5 自动跳过；
-        只重写图形段、不碰模型数据），再停下向用户确认，然后派 analyzer 采样分析，收 report.md
+   - `LAYOUT_READY` → S6 拓扑完成，主 agent 跑 PFD 排布（modeler 已 save +
+     close_file，文件无占用）：
+     1. `scripts/relayout-pfd.ps1 -BkpPath <run目录>/sim/model.bkp -DrawStreams
+        -OutPath <run目录>/sim/model-relayout.tmp.bkp`（块数 <5 自动跳过）
+     2. 输出含 `SKIP` 或脚本报错 → 不覆盖，排布非阻塞；
+        成功 → 备份 `Copy-Item model.bkp model.bkp.orig`（已存在则跳过），
+        再 `Move-Item model-relayout.tmp.bkp model.bkp` 原位覆盖
+     3. **立即重派 modeler 续跑**（不等用户）：prompt 写明排布已完成/已跳过、
+        按 state.json 从 S7 继续
+   - `CONVERGED` → 先停下向用户确认，然后派 analyzer 采样分析，收 report.md
    - `PAUSED` → 向用户复述进度与卡点，等人工干预；用户处理完再派 modeler
      **续跑**（强调“续跑”二字，modeler 按 state.json 继续）。
      用户指示调参 → 派 modeler 执行 TUNE（强调“调参”与预算上限）
@@ -59,7 +66,7 @@ modeler 在 BIP_GATE 确认关键二元对。
 
 ```
 designer: DESIGN_READY | NEEDS_INPUT
-modeler:  CONVERGED | PAUSED | NEEDS_INPUT | BLOCKED
+modeler:  CONVERGED | LAYOUT_READY | PAUSED | NEEDS_INPUT | BLOCKED
 analyzer: ANALYSIS_DONE | BLOCKED
 ```
 
@@ -91,13 +98,21 @@ subagent 不继承主 agent 对话历史。派发时写清：run 目录绝对路
 ### MCP 写权限边界
 modeler 是唯一写模型的角色。analyzer 只采样 + sensitivity 求解等分析工作，禁改基准模型。
 
+### 子agent模型失败时的回退
+子agent返回模型错误（余额不足/超时/限流等）时：
+1. 主agent立即接管该子agent的职责
+2. 遵循该agent的核心原则（designer的"惰性读"、modeler的"状态机"等）
+3. 不重新走研究流程——已有的项目指令和工程知识足够
+4. 在 journal.md 记录 "model_fallback: <agent> 失败原因 <原因>，主agent接管"
+
 ---
 
 ## 本机路径配置
 
 | 用途 | 路径 |
 |---|---|
-| MCP 服务源码与 block 文档 | `D:\mcp-servers\aspen-mcp`（`docs\blocks\`） |
+| MCP 服务源码 | `D:\mcp-servers\aspen-mcp` |
+| block 参考文档（已入库副本） | `knowledge/blocks/`（总目录 `index.md`） |
 | Aspen 官方案例库 | `D:\Program Files\AspenTech\Aspen Plus V15.0\GUI\Examples` |
 | Aspen 版本 | Aspen Plus V15.0 |
 
@@ -111,7 +126,7 @@ knowledge/reference/ 案例参考，按需查
 runs/<run-id>/       见上面 run 结构
 templates/           00-brief 模板
 scripts/new-run.ps1  新建 run（含 sim/ 子目录 + brief）
-scripts/relayout-pfd.ps1  PFD 重排（统一网格 + A* 走线，离线重写 bkp 图形段）
+scripts/relayout-pfd.ps1  PFD 重排（S6 后离线原位覆盖 model.bkp，统一网格 + A* 走线）
 .qoder/agents/       designer / modeler / analyzer
 .qoder/skills/       aspen-design-refs（设计兜底）/ aspen-build-refs（建模操作参考）
 ```
