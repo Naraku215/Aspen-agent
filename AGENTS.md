@@ -15,13 +15,13 @@ designer 先自己出设计spec（惰性读，不预读知识库），模糊才�
 modeler 拿确认后的 design.md 照搭，不重新设计。
 
 ### 2. 按状态机走，绝不推倒重来
-modeler 按状态机（S1→S12）推进，每步落盘 state.json。不收敛先停下问人，
+modeler 按状态机（S1–S9）推进，每步落盘 state.json。不收敛先停下问人，
 修复须经用户指示（TUNE），绝不 new_simulation 重建。PAUSED：save 后停下，
 用户进 Aspen 人工检修，之后续跑（按 state.json 的 phase 从断点继续）。
 
 ### 3. 收敛不等于正确
 缺 BIP、压力倒挂、共沸约束能让模拟"全绿"却错。designer 主动点出可达性上限；
-modeler 在 BIP_GATE 确认关键二元对。
+modeler 在 S4 PROPERTY 的 BIP 核查小节确认关键二元对。
 
 ---
 
@@ -49,10 +49,14 @@ modeler 在 BIP_GATE 确认关键二元对。
      1. `scripts/relayout-pfd.ps1 -BkpPath <run目录>/sim/model.bkp -DrawStreams
         -OutPath <run目录>/sim/model-relayout.tmp.bkp`（块数 <5 自动跳过）
      2. 输出含 `SKIP` 或脚本报错 → 不覆盖，排布非阻塞；
-        成功 → 备份 `Copy-Item model.bkp model.bkp.orig`（已存在则跳过），
-        再 `Move-Item model-relayout.tmp.bkp model.bkp` 原位覆盖
-     3. **立即重派 modeler 续跑**（不等用户）：prompt 写明排布已完成/已跳过、
-        按 state.json 从 S7 继续
+        成功 → **备份** `Copy-Item model.bkp model.bkp.pre-relayout -Force`
+        （每次覆盖备份），再 `Move-Item model-relayout.tmp.bkp model.bkp` 原位覆盖
+     3. **立即重派 modeler 续跑**（不等用户）：prompt 写明排布已完成、
+        按 state.json 从 S7 继续，**首动作为加载验证**：`open_file(model.bkp)` +
+        `status()` 确认可加载（modeler 无 Bash，验证由它做、还原由主 agent 做）
+     4. modeler 报“排布版文件加载失败”→ 主 agent 还原
+        `Copy-Item model.bkp.pre-relayout model.bkp -Force`，重派 modeler 重开续跑
+        （本次排布作废，排布本就非阻塞）；还原后仍加载失败 → PAUSED 转人工
    - `CONVERGED` → 先停下向用户确认，然后派 analyzer 采样分析，收 report.md
    - `PAUSED` → 向用户复述进度与卡点，等人工干预；用户处理完再派 modeler
      **续跑**（强调“续跑”二字，modeler 按 state.json 继续）。

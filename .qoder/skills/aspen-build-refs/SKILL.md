@@ -132,7 +132,7 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
 
 ## 6. MCP 调用依赖参照表
 
-每个 S 阶段内哪些调用可并行、哪些必须串行。铁律 9 的判断依据。
+每个 S 阶段内哪些调用可并行、哪些必须串行——并行前对照本表判断依赖。
 
 ### 可并行（无依赖）
 - S1 过关后：visible + batch_refresh + status（都是独立操作，只需模拟已存在）
@@ -163,10 +163,10 @@ BLKSTAT=0 正常；非零 → `diagnose([块名或错误码])` 定位。
 -OutPath <run>/sim/model-relayout.tmp.bkp`，成功后原位覆盖 model.bkp，
 S7 起在排布好的模型上继续（用户全程可观察）。要点：
 - 纯离线重写 bkp 第一个 PFSVData 图形段，**不碰模型数据**，输入文件只读
-- 原位覆盖两步走：脚本输出临时文件（OutPath 禁止等于输入），再
-  `Move-Item` 覆盖 model.bkp；覆盖前备份原图为 `model.bkp.orig`（仅首次）
-- 块数 <5 自动跳过（输出 `SKIP:` 且 exit 0）——排布非阻塞，跳过/失败都直接
-  重派 modeler 从 S7 继续
+- **编排流程（备份 → 覆盖 → 加载验证 → 失败还原）以 AGENTS.md 的
+  LAYOUT_READY 分支为唯一权威**，本 skill 不复述；只记脚本技术要点：
+  临时文件 OutPath 禁止等于输入；覆盖前备份名 `model.bkp.pre-relayout`
+- 块数 <5 自动跳过（输出 `SKIP:` 且 exit 0），主 agent 见 SKIP 不覆盖直接重派
 - S7+ 只写数据层不碰图形段，在排布版文件上继续建模无影响
 - 块间流股走统一网格 + A* 通道（不穿模块、不重合），
   端口流股（feed/product）删除记录交 Aspen 原生箭头——自画端口线效果差，别改回
